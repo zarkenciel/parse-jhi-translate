@@ -1,20 +1,32 @@
 const path = require('path');
 const fs = require('fs');
 
-const translationFilesDir = './src/main/webapp/i18n/fr/'
-const outputPath = './test-parse-tr/';
+let defaultLang = 'en';
+let previousTranslationFilesPath = './src/main/webapp/i18n/'+defaultLang+'/'
+let outputPath = previousTranslationFilesPath;
+let fileExtension = '.component.html';
+let sourcePath = './src/main/webapp/app/pages';
 
 parseJhiTranslate();
 
 function parseJhiTranslate() {
     console.log('-- start parsing jhiTranslate');
 
-    const filepaths = findFiles('.', '.component.html');
+    grabParams();
+    const filepaths = findFiles(sourcePath, fileExtension);
     const directivesModel = buildDirectivesModel(filepaths);
     const translationsModel = buildTranslationModel(directivesModel);
     writeTranslationFiles(translationsModel);
 
     console.log('-- stop parsing jhiTranslate');
+}
+
+function grabParams() {
+    defaultLang = process.argv[2] || defaultLang;
+    previousTranslationFilesPath = process.argv[3] || previousTranslationFilesPath;
+    outputPath = process.argv[4] || outputPath;
+    fileExtension = process.argv[5] || fileExtension;
+    sourcePath = process.argv[6] || sourcePath;
 }
 
 function findFiles(startingPath, fileExtension) {
@@ -122,13 +134,18 @@ function buildTranslationModel(directivesModel) {
 
         let currObj = translationModel;
         const keyParts = directive.trKey.split('.');
-        const existingModel = loadExistingTranslationModel(keyParts[0]);
+        const previousModel = loadPreviousTranslationModel(keyParts[0]);
         for (let i = 0; i < keyParts.length; i++) {
             const keyPart = keyParts[i];
             if (!currObj[keyPart]) {
                 const lastKey = (i == keyParts.length - 1);
                 if (lastKey) {
-                    currObj[keyPart] = directive.trValue;
+                    const previousTranslation = getFromModel(previousModel, keyParts);
+                    if (previousTranslation) {
+                        currObj[keyPart] = previousTranslation;
+                    } else {
+                        currObj[keyPart] = directive.trValue;
+                    }
                 } else {
                     currObj[keyPart] = {};
                 }
@@ -142,24 +159,24 @@ function buildTranslationModel(directivesModel) {
     return translationModel;
 }
 
-function compareWithExistingTranslations(translationModel) {
-    Object.keys(translationModel).forEach((key, index) => {
-        const existingModel = loadExistingTranslationModel(key);
-        console.log(JSON.stringify(existingModel, null, 4));
-        console.log();
-    });
-
-    return translationModel;
-}
-
-function loadExistingTranslationModel(filename) {
+function loadPreviousTranslationModel(filename) {
     try {
-        const fileContent = fs.readFileSync(path.join(translationFilesDir, filename) + '.json', 'utf8');
+        const fileContent = fs.readFileSync(path.join(previousTranslationFilesPath, filename) + '.json', 'utf8');
         const model = JSON.parse(fileContent);
         return model;
     } catch (e) {
         return null;
     }
+}
+
+function getFromModel(model, keyParts) {
+    let currObj = model;
+    for (const keyPart of keyParts) {
+        if (currObj) {
+            currObj = currObj[keyPart];
+        }
+    }
+    return currObj;
 }
 
 function writeTranslationFiles(translationModel) {
