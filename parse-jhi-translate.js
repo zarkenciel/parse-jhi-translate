@@ -1,15 +1,18 @@
 const path = require('path');
 const fs = require('fs');
 
+const translationFilesDir = './src/main/webapp/i18n/fr/'
+const outputPath = './test-parse-tr/';
+
 parseJhiTranslate();
 
 function parseJhiTranslate() {
     console.log('-- start parsing jhiTranslate');
 
     const filepaths = findFiles('.', '.component.html');
-    const directivesModel = seekDirectivesInFiles(filepaths);
-    const translationModel = buildTranslationJson(directivesModel);
-    writeTranslationFiles(translationModel);
+    const directivesModel = buildDirectivesModel(filepaths);
+    const translationsModel = buildTranslationModel(directivesModel);
+    writeTranslationFiles(translationsModel);
 
     console.log('-- stop parsing jhiTranslate');
 }
@@ -38,12 +41,13 @@ function doFindFiles(startingPath, criteria, resultArray) {
     }
 }
 
-function seekDirectivesInFiles(filepaths) {
+function buildDirectivesModel(filepaths) {
     const allDirectives = [];
+
     for (const path of filepaths) {
-        const directivesInFile = seekDirectives(path);
-        if (directivesInFile.directivesArray.length > 0) {
-            allDirectives.push(directivesInFile);
+        const directives = seekDirectives(path);
+        if (directives.length > 0) {
+            allDirectives.push(...directives);
         }
     }
 
@@ -53,12 +57,8 @@ function seekDirectivesInFiles(filepaths) {
 function seekDirectives(filepath) {
     const fileContent = fs.readFileSync(filepath, 'utf8');
     const indexes = findIndexesOfDirectives(fileContent);
-    const directivesDatas = extractDirectiveDatas(fileContent, indexes);
-    const directivesInFile = {
-        filepath: filepath,
-        directivesArray: directivesDatas,
-    };
-    return directivesInFile;
+    const directives = extractDirectiveDatas(filepath, fileContent, indexes);
+    return directives;
 }
 
 function findIndexesOfDirectives(fileContent) {
@@ -72,10 +72,11 @@ function findIndexesOfDirectives(fileContent) {
     return indexes;
 }
 
-function extractDirectiveDatas(fileContent, indexes) {
-    const datas = [];
+function extractDirectiveDatas(filepath, fileContent, indexes) {
+    const directives = [];
     for (const index of indexes) {
         const directiveData = {
+            file: filepath,
             index: index,
             isEval: isBoxed(fileContent, index),
             trKey: extractKey(fileContent, index),
@@ -87,9 +88,9 @@ function extractDirectiveDatas(fileContent, indexes) {
             directiveData.isEval = true;
         }
 
-        datas.push(directiveData);
+        directives.push(directiveData);
     }
-    return datas;
+    return directives;
 }
 
 function isBoxed(content, index) {
@@ -111,39 +112,60 @@ function extractValue(content, index) {
     return translationValue;
 }
 
-function buildTranslationJson(allDirectives) {
-    const translationsJson = {};
+function buildTranslationModel(directivesModel) {
+    const translationModel = {};
 
-    for (const directivesInFile of allDirectives) {
-        // console.log('--- ' + directivesInFile.filepath + ' #' + directivesInFile.directivesArray.length);
-        for (const directiveData of directivesInFile.directivesArray) {
-            if (!directiveData.isEval) {
-                // console.log('---- [' + (directiveData.isEval ? 'isEval' : 'noEval' ) + '] ' + directiveData.trKey + ' : ' + directiveData.trValue);
-                const keyParts = directiveData.trKey.split('.');
-                let currObj = translationsJson;
-                for (let i = 0; i < keyParts.length; i++) {
-                    const keyPart = keyParts[i];
-                    if (!currObj[keyPart]) {
-                        if (i == keyParts.length - 1) {
-                            currObj[keyPart] = directiveData.trValue;
-                        } else {
-                            currObj[keyPart] = {};
-                        }
-                    }
-                    currObj = currObj[keyPart];
+    for (const directive of directivesModel) {
+        if (directive.isEval) {
+            continue;
+        }
+
+        let currObj = translationModel;
+        const keyParts = directive.trKey.split('.');
+        const existingModel = loadExistingTranslationModel(keyParts[0]);
+        for (let i = 0; i < keyParts.length; i++) {
+            const keyPart = keyParts[i];
+            if (!currObj[keyPart]) {
+                const lastKey = (i == keyParts.length - 1);
+                if (lastKey) {
+                    currObj[keyPart] = directive.trValue;
+                } else {
+                    currObj[keyPart] = {};
                 }
             }
+            currObj = currObj[keyPart];
         }
     }
 
-    return translationsJson;
+    // compareWithExistingTranslations(translationModel);
+
+    return translationModel;
 }
 
-function writeTranslationFiles(translationJson) {
-    const outputPath = './test-parse-tr/';
-    Object.keys(translationJson).forEach((key, index) => {
+function compareWithExistingTranslations(translationModel) {
+    Object.keys(translationModel).forEach((key, index) => {
+        const existingModel = loadExistingTranslationModel(key);
+        console.log(JSON.stringify(existingModel, null, 4));
+        console.log();
+    });
+
+    return translationModel;
+}
+
+function loadExistingTranslationModel(filename) {
+    try {
+        const fileContent = fs.readFileSync(path.join(translationFilesDir, filename) + '.json', 'utf8');
+        const model = JSON.parse(fileContent);
+        return model;
+    } catch (e) {
+        return null;
+    }
+}
+
+function writeTranslationFiles(translationModel) {
+    Object.keys(translationModel).forEach((key, index) => {
         const fileModel = {};
-        fileModel[key] = translationJson[key];
+        fileModel[key] = translationModel[key];
         const fileContent = JSON.stringify(fileModel, null, 4);
         const destinationFile = path.join(outputPath, key) + '.json';
         fs.writeFileSync(destinationFile, fileContent);
