@@ -1,11 +1,11 @@
 const path = require('path');
 const fs = require('fs');
 
-let defaultLang = 'en';
+let defaultLang = 'de';
 let previousTranslationFilesPath = './src/main/webapp/i18n/'+defaultLang+'/'
 let outputPath = previousTranslationFilesPath;
 let fileExtension = '.component.html';
-let sourcePath = './src/main/webapp/app/pages';
+let sourcePath = './src/main/webapp/app/pages/';
 
 parseJhiTranslate();
 
@@ -22,11 +22,11 @@ function parseJhiTranslate() {
 }
 
 function grabParams() {
-    defaultLang = process.argv[2] || defaultLang;
-    previousTranslationFilesPath = process.argv[3] || previousTranslationFilesPath;
+    sourcePath = process.argv[2] || sourcePath;
+    fileExtension = process.argv[3] || fileExtension;
     outputPath = process.argv[4] || outputPath;
-    fileExtension = process.argv[5] || fileExtension;
-    sourcePath = process.argv[6] || sourcePath;
+    previousTranslationFilesPath = process.argv[5] || previousTranslationFilesPath;
+    defaultLang = process.argv[6] || defaultLang;
 }
 
 function findFiles(startingPath, fileExtension) {
@@ -39,6 +39,12 @@ function doFindFiles(startingPath, criteria, resultArray) {
     if (!fs.existsSync(startingPath)) {
         console.log("-- dir does not exists", startingPath);
         return;
+    }
+
+    const fileStatus = fs.lstatSync(startingPath);
+    if (!fileStatus.isDirectory()) {
+        resultArray.push(startingPath);
+        return resultArray;
     }
 
     const files = fs.readdirSync(startingPath);
@@ -153,8 +159,6 @@ function buildTranslationModel(directivesModel) {
             currObj = currObj[keyPart];
         }
     }
-
-    // compareWithExistingTranslations(translationModel);
 
     return translationModel;
 }
