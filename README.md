@@ -1,5 +1,5 @@
 # parse-jhi-translate
-Avoid the manual writing of your jhipster translations files. Make an npm command from this node script, it will parse your code, search for the "parse-jhi-translate" directives, extracts keys/values and store them in json files.
+Avoid the manual writing of your jhipster translations files. Make an npm command from this node script, it will parse your code, search for the "jhiTranslate" directives, extracts keys/values and store them in json files.
 
 # set up
 * Put the parse-jhi-translate anywhere you want in your project, like a /scripts folder.
